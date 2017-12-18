@@ -1,14 +1,15 @@
 # -*- coding: utf-8 -*-
 from tsdata import TsDataSet
 import pandas as pd
+import socket
+import requests
+import math
 try:
     # Use ujson if available.
     import ujson as json
 except Exception:
     import json
-import socket
-import requests
-import unittest
+
 # import timeit
 
 
@@ -20,14 +21,6 @@ def ping(host, port):
         port:(int)
     :return
         bool
-
-    :doctest
-    >>> ping('192.168.1.91', 4243)
-    True
-    >>> ping('192.168.1.91', 4243)
-    True
-    >>> ping('192.168.1.91', 4243)
-    True
     """
     try:
         socket.socket().connect((host, port))
@@ -54,7 +47,7 @@ class Connection(object):
     @staticmethod
     def __metric_tags(str_data):
         metric, tag_list = str_data[:-1].split('{')
-        tags = dict(tuple(i.split('=')) for i in tag_list.split(','))
+        tags = dict(tuple(i.split('=')) for i in tag_list.split(', '))
         return metric, tags
 
     def _read(self, **kwargs):
@@ -81,7 +74,7 @@ class Connection(object):
                 timestamp = (i - pd.Timedelta(
                     '{} h'.format(self.__timedelta))).value // 10**9
                 metric, tags = self.__metric_tags(j)
-                if pd.isna(df.loc[i, j]):
+                if math.isnan(df.loc[i, j]):
                     continue
                 json_data = dict(
                     metric=metric,
@@ -119,123 +112,7 @@ class Connection(object):
                             "pd.DataFrame or TsDataSet!***")
 
 
-class TestClientFuctions(unittest.TestCase):
-    """
-    Unittest.
-    """
-
-    def test_ping(self):
-        self.assertEqual(ping('192.168.1.91', 4243), True)
-
-    def test_connection(self):
-        connection = Connection(server='192.168.1.91', port=4243)
-        BodyContent = {
-            "start": 1507510800000,
-            "end": 1507510920000,
-            "queries": [{
-                "metric": "test_rps",
-                "aggregator": "avg",
-                "downsample": "1m-avg-nan",
-                "filters": [{
-                    "tagk": "host",
-                    "type": "literal_or",
-                    "filter": "host1",
-                    "group_by": True
-                }]
-            }]
-        }
-        response = json.loads(
-            '''
-            [
-                {
-                    "metric": "test_rps",
-                    "tags": {
-                        "host": "host1"
-                    },
-                    "aggregateTags": [],
-                    "dps": {
-                        "1507510800": 54.58156204223633,
-                        "1507510860": 65.78498077392578,
-                        "1507510920": 70.2049331665039
-                    }
-                }
-            ]
-            '''
-        )
-        self.assertEqual(connection.read(**BodyContent), response)
-        BodyContent = {
-            "start": 1507510800000,
-            "end": 1507510980000,
-            "queries": [{
-                "metric": "test_rps",
-                "aggregator": "avg",
-                "downsample": "1m-avg-nan",
-                "filters": [{
-                    "tagk": "host",
-                    "type": "wildcard",
-                    "filter": "*",
-                    "group_by": True
-                }
-                ]
-            }, {
-                "metric": "test_cpu",
-                "aggregator": "avg",
-                "downsample": "1m-avg-nan",
-                "filters": [{
-                    "tagk": "host",
-                    "type": "wildcard",
-                    "filter": "*",
-                    "group_by": True
-                }
-                ]
-            }
-            ]
-        }
-        response = json.loads(
-            '''
-                [
-                    {
-                        "metric": "test_rps",
-                        "tags": {
-                            "host": "host1"
-                        },
-                        "aggregateTags": [],
-                        "dps": {
-                            "1507510800": 54.58156394958496,
-                            "1507510860": 65.78498077392578,
-                            "1507510920": 70.2049331665039
-                        }
-                    }
-                ]
-                '''
-        )
-        self.assertEqual(connection.read_ts(**BodyContent).dps.shape, (4, 4))
-
-
-# my test case
-def test_ping(host, port):
-    print "=== Begin Test ==="
-    for i in range(3):
-        if ping(host, port):
-            print i, 'OpenTSDB connection OK!'
-    print "=== End Test ==="
-
-
 if __name__ == '__main__':
-    do_unittest = False
-    do_doctest = False
-
-    # doctest
-    if do_doctest:
-        import doctest
-        doctest.testmod()
-
-    # test TsData class
-    if do_unittest:
-        # unittest.main()
-        suite = unittest.TestLoader().loadTestsFromTestCase(TestClientFuctions)
-        unittest.TextTestRunner(verbosity=2).run(suite)
-
     connection = Connection('192.168.1.91', 4243)
     BodyContent = {
         "start": 1507510800000,
